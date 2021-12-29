@@ -1,3 +1,5 @@
+import os.path
+
 import torch as t
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,29 +11,33 @@ from dataset import LoadDataset
 from Models import FCN
 import cfg
 from metrics import *
+from PIL import Image
+from predict import get_cm
 
-
+# 判断是否应用GPU进行运算
 device = t.device('cuda') if t.cuda.is_available() else t.device('cpu')
+# 类别数
 num_class = cfg.DATASET[1]
-
+cm = get_cm()
+# 加载数据集
 Load_train = LoadDataset([cfg.TRAIN_ROOT, cfg.TRAIN_LABEL], cfg.crop_size)
 Load_val = LoadDataset([cfg.VAL_ROOT, cfg.VAL_LABEL], cfg.crop_size)
 
 train_data = DataLoader(Load_train, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=4)
 val_data = DataLoader(Load_val, batch_size=cfg.BATCH_SIZE, shuffle=True, num_workers=4)
 
-
+# 定义模型，加载到设备中
 fcn = FCN.FCN(num_class)
 fcn = fcn.to(device)
 criterion = nn.NLLLoss().to(device)     # 没有做softmax的交叉熵函数,需要先做log_softmax,才相当于CrossEntropyLoss
-optimizer = optim.Adam(fcn.parameters(), lr=1e-4)       # 以上基本都是一些固定的写法
+optimizer = optim.Adam(fcn.parameters(), lr=1e-4)       # 以上基本都是一些固定的写法, 主要是超参数
 
 
 def train(model):
     best = [0]
     train_loss = 0
     net = model.train()
-    running_metrics_val = runningScore(12)      # 这里是评价指标
+    running_metrics_val = runningScore(num_class)      # 这里是评价指标，传入类别数，会计算混淆矩阵，进而计算mIou等
 
     # 训练轮次
     for epoch in range(cfg.EPOCH_NUMBER):
@@ -63,27 +69,28 @@ def train(model):
             true_label = img_label.data.cpu().numpy()
             running_metrics_val.update(true_label, pre_label)
             print('|batch[{}/{}]|batch_loss {: .8f}|'.format(i + 1, len(train_data), loss.item()))
-
         print("*******Batch END**********")
         metrics = running_metrics_val.get_scores()
         for k, v in metrics[0].items():
             print(k, v)
         train_miou = metrics[0]['mIou: ']
-        if max(best) <= train_miou:
+        if max(best) <= train_miou:     # 保存训练集中最好的MIOU对应的模型
             best.append(train_miou)
-            t.save(net.state_dict(), './Results/weights/FCN_weight/camvid{}.pth'.format(epoch))
+            t.save(net.state_dict(), os.path.join(cfg.OUT_DIR,'weights/FCN_weight/camvid{}.pth'.format(epoch)))
+        # 一批次训练完成后进行验证，输出一些结果便于展示
+        evaluate(fcn, epoch)
 
 
-def evaluate(model):
+def evaluate(model,num):
     net = model.eval()
-    running_metrics_val = runningScore(12)
+    running_metrics_val = runningScore(num_class)
     eval_loss = 0
     prec_time = datetime.now()
-
+    flag = True
+    # 在数据集上进行评价
     for j, sample in enumerate(val_data):
         valImg = Variable(sample['img'].to(device))
         valLabel = Variable(sample['label'].long().to(device))
-
         out = net(valImg)
         out = F.log_softmax(out, dim=1)
         loss = criterion(out, valLabel)
@@ -91,10 +98,18 @@ def evaluate(model):
         pre_label = out.max(dim=1)[1].data.cpu().numpy()
         true_label = valLabel.data.cpu().numpy()
         running_metrics_val.update(true_label, pre_label)
+        # 输出一次模型
+        if flag:
+            flag = False
+            pre = cm[pre_label]
+            pre1 = Image.fromarray(pre)
+            pre1.save(os.path.join(cfg.OUT_DIR,"val") + str(num) + '.png')
+            print('val save on ')
     metrics = running_metrics_val.get_scores()
     for k, v in metrics[0].items():
-        print(k, v)
+        print("val:", k, v)
 
+    # 打印验证花费的时间
     cur_time = datetime.now()
     h, remainder = divmod((cur_time - prec_time).seconds, 3600)
     m, s = divmod(remainder, 60)

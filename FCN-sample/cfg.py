@@ -13,5 +13,7 @@ VAL_LABEL = './Datasets/' + DATASET[0] + '/val_labels'
 TEST_ROOT = './Datasets/' + DATASET[0] + '/test'
 TEST_LABEL = './Datasets/' + DATASET[0] + '/test_labels'
 
+OUT_DIR = "./Results"
+
 
 
