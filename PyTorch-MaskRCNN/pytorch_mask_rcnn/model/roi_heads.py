@@ -46,7 +46,7 @@ class RoIHeads(nn.Module):
         self.mask_roi_pool = None
         self.mask_predictor = None
         
-        self.proposal_matcher = Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=False)  # 返回一张表说明该anchors是正样本还是负样本
+        self.proposal_matcher = Matcher(fg_iou_thresh, bg_iou_thresh, allow_low_quality_matches=False)  # 返回一张表说明该anchors是正样本还是负样本, 这里是false 说明大于iou就认为是一个正样本，matched_idx就一定有目标
         self.fg_bg_sampler = BalancedPositiveNegativeSampler(num_samples, positive_fraction)  # 根据label（上一个函数的返回结果），和所需样本数及正样本比重，返回正样本和负样本的index
         self.box_coder = BoxCoder(reg_weights)  # 该函数用于将RPN的bbox预测值和anchor_generator编解码成实际的bbox的位置
         
@@ -65,7 +65,7 @@ class RoIHeads(nn.Module):
     def select_training_samples(self, proposal, target):
         gt_box = target['boxes']
         gt_label = target['labels']
-        proposal = torch.cat((proposal, gt_box))
+        proposal = torch.cat((proposal, gt_box))        # proposal 是nms得到的估计有目标的位置，网络的proposal ， rpn中计算loss是计算anchor的 为何加上真实值？ 第二个网络，proposal就相当于已知值了，当做标签来使用了。所以要加上真实值
         
         iou = box_iou(gt_box, proposal)  # # 计算gt与proposal之间的iou
         pos_neg_label, matched_idx = self.proposal_matcher(iou)  # 返回是属于正样本还是负样本
@@ -75,7 +75,7 @@ class RoIHeads(nn.Module):
         regression_target = self.box_coder.encode(gt_box[matched_idx[pos_idx]], proposal[pos_idx])  # 将gt的位置编码为与模型输出的位置一致
         proposal = proposal[idx]  # 得到所有用于训练的proposal
         matched_idx = matched_idx[idx]  # 得到所有用于训练的matched_idx
-        label = gt_label[matched_idx]  # 得到所有用于训练的label
+        label = gt_label[matched_idx]  # 得到所有用于训练的label， 这里对应具体的目标了，而不再是前景背景了
         num_pos = pos_idx.shape[0]
         label[num_pos:] = 0
         
@@ -115,11 +115,11 @@ class RoIHeads(nn.Module):
         if self.training:
             proposal, matched_idx, label, regression_target = self.select_training_samples(proposal, target)  # 根据规则筛选出用于训练的目标
         
-        box_feature = self.box_roi_pool(feature, proposal, image_shape)  # 用ROIAlign得到大小为[512,256,7,7]的特征图
-        class_logit, box_regression = self.box_predictor(box_feature)  # 得到分类结果和bbox预测结果
+        box_feature = self.box_roi_pool(feature, proposal, image_shape)  # 用ROIAlign得到大小为[512,256,7,7]的特征图,之所以需要这样是因为后面有全连接，预测类别，必须保证前面的尺寸固定。ROIAlign可以看成是一种改进了的Maxpooling 采用了双线性插值。具体参考知乎
+        class_logit, box_regression = self.box_predictor(box_feature)  # 得到分类结果和bbox预测结果， fasterRCNN 使用全连接了。#
         
         result, losses = {}, {}
-        if self.training:
+        if self.training:       # TODO Loss是如何计算的 box部分 类别预测部分
             classifier_loss, box_reg_loss = fastrcnn_loss(class_logit, box_regression, label, regression_target)  # 返回得到cls和bbox的loss
             losses = dict(roi_classifier_loss=classifier_loss, roi_box_loss=box_reg_loss)
         else:

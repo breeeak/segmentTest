@@ -2,7 +2,7 @@ from .voc_dataset import VOCDataset
 from .coco_dataset import COCODataset
 
 __all__ = ["datasets", "collate_wrapper"]
-
+# __all__，其他文件中使用from xxx import *导入该文件时，只会导入 __all__ 列出的成员，可以其他成员都被排除在外。
 
 def datasets(ds, *args, **kwargs):
     ds = ds.lower()

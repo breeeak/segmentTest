@@ -19,7 +19,7 @@ class Transformer:
         return image, target
 
     def normalize(self, image):
-        if image.shape[0] == 1:
+        if image.shape[0] == 1:     # 如果是灰度图变为3通道图
             image = image.repeat(3, 1, 1)
         
         dtype, device = image.dtype, image.device
@@ -31,14 +31,14 @@ class Transformer:
         ori_image_shape = image.shape[-2:]
         min_size = float(min(image.shape[-2:]))
         max_size = float(max(image.shape[-2:]))
-        
+        # 图像保留原来的比例，同时使得尺寸变化为边符合规定的尺寸范围
         scale_factor = min(self.min_size / min_size, self.max_size / max_size)
         size = [round(s * scale_factor) for s in ori_image_shape]
-        image = F.interpolate(image[None], size=size, mode='bilinear', align_corners=False)[0]
+        image = F.interpolate(image[None], size=size, mode='bilinear', align_corners=False)[0]      # 使用双线性插值变化到规定的尺寸
 
         if target is None:
             return image, target
-        
+        # box， mask也要同步变化
         box = target['boxes']
         box[:, [0, 2]] = box[:, [0, 2]] * image.shape[-1] / ori_image_shape[1]
         box[:, [1, 3]] = box[:, [1, 3]] * image.shape[-2] / ori_image_shape[0]
@@ -51,15 +51,15 @@ class Transformer:
             
         return image, target
     
-    def batched_image(self, image, stride=32):
+    def batched_image(self, image, stride=32):      # TODO 这里stride为什么是32，需要再了解这些尺寸变化的原因
         size = image.shape[-2:]
-        max_size = tuple(math.ceil(s / stride) * stride for s in size)
+        max_size = tuple(math.ceil(s / stride) * stride for s in size)      # 变到stride的整数倍
+        # 这个函数的作用就是将图片变到符合stride的整数倍，其他地方用0填充，注意可能会大于之前规定的max_size
+        batch_shape = (image.shape[-3],) + max_size     # 做个拼接 3，宽，高
+        batched_img = image.new_full(batch_shape, 0)    # 返回一个全0的相同尺寸的图像
+        batched_img[:, :image.shape[-2], :image.shape[-1]] = image  # 再用image来填充，
 
-        batch_shape = (image.shape[-3],) + max_size
-        batched_img = image.new_full(batch_shape, 0)
-        batched_img[:, :image.shape[-2], :image.shape[-1]] = image
-
-        return batched_img[None]
+        return batched_img[None]        # 这里None的作用是在最前面在增加一个维度
     
     def postprocess(self, result, image_shape, ori_image_shape):
         box = result['boxes']

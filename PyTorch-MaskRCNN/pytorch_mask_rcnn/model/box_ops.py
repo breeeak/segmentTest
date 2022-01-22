@@ -5,8 +5,8 @@ import torch
 
 class BoxCoder:
     def __init__(self, weights, bbox_xform_clip=math.log(1000. / 16)):
-        self.weights = weights
-        self.bbox_xform_clip = bbox_xform_clip
+        self.weights = weights      # 微调的权重，默认是1
+        self.bbox_xform_clip = bbox_xform_clip      # 最大偏移量
 
     def encode(self, reference_box, proposal):
         """
@@ -46,12 +46,12 @@ class BoxCoder:
             boxes (Tensor[N, 4]): reference boxes.
         """
         
-        dx = delta[:, 0] / self.weights[0]
+        dx = delta[:, 0] / self.weights[0]      # 偏移量是相对于中心和宽高的，而且是一个比率
         dy = delta[:, 1] / self.weights[1]
         dw = delta[:, 2] / self.weights[2]
         dh = delta[:, 3] / self.weights[3]
 
-        dw = torch.clamp(dw, max=self.bbox_xform_clip)
+        dw = torch.clamp(dw, max=self.bbox_xform_clip)      # 限制区间的作用，不超过规定的最大偏移量
         dh = torch.clamp(dh, max=self.bbox_xform_clip)
 
         width = box[:, 2] - box[:, 0]
@@ -59,9 +59,9 @@ class BoxCoder:
         ctr_x = box[:, 0] + 0.5 * width
         ctr_y = box[:, 1] + 0.5 * height
 
-        pred_ctr_x = dx * width + ctr_x
+        pred_ctr_x = dx * width + ctr_x     # 中心偏移量，dx,dy肯定得相对于宽高的，
         pred_ctr_y = dy * height + ctr_y
-        pred_w = torch.exp(dw) * width
+        pred_w = torch.exp(dw) * width      # 宽高保证为正值
         pred_h = torch.exp(dh) * height
 
         xmin = pred_ctr_x - 0.5 * pred_w
@@ -84,12 +84,12 @@ def box_iou(box_a, box_b):
             IoU values for every element in box_a and box_b
     """
     
-    lt = torch.max(box_a[:, None, :2], box_b[:, :2])
-    rb = torch.min(box_a[:, None, 2:], box_b[:, 2:])
+    lt = torch.max(box_a[:, None, :2], box_b[:, :2])        # 左上角，较靠下的位置, torch max很灵活，也可以两个数组（符合一定规则，相当于每个都进行比较），一维的，单个数不可以
+    rb = torch.min(box_a[:, None, 2:], box_b[:, 2:])        # 右上角，较考上位置
 
-    wh = (rb - lt).clamp(min=0)
+    wh = (rb - lt).clamp(min=0)     # 是在找相交区域， 小于0的设为0，去掉负数
     inter = wh[:, :, 0] * wh[:, :, 1]
-    area_a = torch.prod(box_a[:, 2:] - box_a[:, :2], 1)
+    area_a = torch.prod(box_a[:, 2:] - box_a[:, :2], 1)     # 求面积,指定维度就乘积，否则全都相乘
     area_b = torch.prod(box_b[:, 2:] - box_b[:, :2], 1)
     
     return inter / (area_a[:, None] + area_b - inter)

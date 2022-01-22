@@ -95,7 +95,7 @@ class MaskRCNN(nn.Module):
         self.backbone = backbone
         out_channels = backbone.out_channels  # 256
         
-        #------------- RPN --------------------------
+        # ------------- RPN --------------------------
         anchor_sizes = (128, 256, 512)  # 所采用的anchors的基础大小有这三种
         anchor_ratios = (0.5, 1, 2)  # 所采用的anchors的长宽比有这三种
         num_anchors = len(anchor_sizes) * len(anchor_ratios)  # 总的anchors类型有9种
@@ -112,12 +112,12 @@ class MaskRCNN(nn.Module):
              rpn_reg_weights,
              rpn_pre_nms_top_n, rpn_post_nms_top_n, rpn_nms_thresh)
         
-        #------------ RoIHeads --------------------------
+        # ------------ RoIHeads --------------------------
         # 用于分类和bbox的部分，align到7x7
         box_roi_pool = RoIAlign(output_size=(7, 7), sampling_ratio=2)
         
         resolution = box_roi_pool.output_size[0]
-        in_channels = out_channels * resolution ** 2
+        in_channels = out_channels * resolution ** 2        # 256*7*7
         mid_channels = 1024
         box_predictor = FastRCNNPredictor(in_channels, mid_channels, num_classes)  # 定义用于分类和bbox部分的网络
         
@@ -148,7 +148,7 @@ class MaskRCNN(nn.Module):
         image_shape = image.shape[-2:]
         feature = self.backbone(image)  # 通过backbone网络得到一个特征，作为RPN的输入和最后三层的输入
         
-        proposal, rpn_losses = self.rpn(feature, image_shape, target)
+        proposal, rpn_losses = self.rpn(feature, image_shape, target)       # 这个rpn只使用了最后一个featuremap
         result, roi_losses = self.head(feature, proposal, image_shape, target)
         
         if self.training:
@@ -164,7 +164,7 @@ class FastRCNNPredictor(nn.Module):
         self.fc1 = nn.Linear(in_channels, mid_channels)  # 两个全链接网络
         self.fc2 = nn.Linear(mid_channels, mid_channels)
         self.cls_score = nn.Linear(mid_channels, num_classes)  # 之后一个输出类别
-        self.bbox_pred = nn.Linear(mid_channels, num_classes * 4)  # 一个输出bbox,每一类都有4个，总共num_classes * 4个
+        self.bbox_pred = nn.Linear(mid_channels, num_classes * 4)  # 每个类都输出bbox,每一类都有4个，总共num_classes * 4个
         
     def forward(self, x):
         x = x.flatten(start_dim=1)  # 将7x7展平
@@ -207,30 +207,32 @@ class ResBackbone(nn.Module):
     def __init__(self, backbone_name, pretrained):
         super().__init__()
         body = models.resnet.__dict__[backbone_name](
-            pretrained=pretrained, norm_layer=misc.FrozenBatchNorm2d)
+            pretrained=pretrained, norm_layer=misc.FrozenBatchNorm2d)       # BN层换成它的原因是 它更适合于小批量，maskrcnn 改成了它The reason why we use FrozenBatchNorm2d instead of BatchNorm2d is that the sizes of the batches are very small, which makes the batch statistics very poor and degrades performance.
         
         for name, parameter in body.named_parameters():
-            if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
-                parameter.requires_grad_(False)
+            # print(name)
+            # if 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
+            if 'layer1' not in name and 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:     # 这里改了一下试试
+                parameter.requires_grad_(False)         # layer2,3,4 (4,6,3) 需要进行训练,其他层不需要？ 这里之所以没有使用C1，是考虑到由于C1的尺寸过大，训练过程中会消耗很多的显存。 TODO 这里好像C2也没有使用
                 
-        self.body = nn.ModuleDict(d for i, d in enumerate(body.named_children()) if i < 8)
+        self.body = nn.ModuleDict(d for i, d in enumerate(body.named_children()) if i < 8)      # 只取前8个，后面的avgpool与fc层去掉
         in_channels = 2048
         self.out_channels = 256
         
-        self.inner_block_module = nn.Conv2d(in_channels, self.out_channels, 1)
+        self.inner_block_module = nn.Conv2d(in_channels, self.out_channels, 1)      # 这里是变化尺寸以输入到rpn中
         self.layer_block_module = nn.Conv2d(self.out_channels, self.out_channels, 3, 1, 1)
         
         for m in self.children():
             if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_uniform_(m.weight, a=1)
+                nn.init.kaiming_uniform_(m.weight, a=1)     # 这里是权重的初始化一种方法，Xavier在tanh中表现的很好，但在Relu激活函数中表现的很差，所以使用了kaiming_uniform_
                 nn.init.constant_(m.bias, 0)
         
-    def forward(self, x):
+    def forward(self, x):       # TODO 这里整个的是一个顺序网络，没有分支，为何？不是有C2,C3,C4,C5吗？ backbone 多接了1*1和3*3，没有relu
         for module in self.body.values():
             x = module(x)
-        x = self.inner_block_module(x)
-        x = self.layer_block_module(x)
-        return x
+        x = self.inner_block_module(x)  # 变到256， 先1×1
+        x = self.layer_block_module(x)  # 再3*3
+        return x    # x的尺寸变为1/32
 
     
 def maskrcnn_resnet50(pretrained, num_classes, pretrained_backbone=True):

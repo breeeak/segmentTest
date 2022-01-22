@@ -18,8 +18,8 @@ class RPNHead(nn.Module):  # RPN部分的网络结构
             nn.init.constant_(l.bias, 0)
             
     def forward(self, x):
-        x = F.relu(self.conv(x))  # 前两个有关cls，代表RPN图中的上一行
-        logits = self.cls_logits(x)
+        x = F.relu(self.conv(x))  # 前两个有关cls，代表RPN图中的上一行, 由backbone直接到这里，这里再加上一个3×3 没有接1*1，分类与回归那里有
+        logits = self.cls_logits(x)     # 这里输出一个值代表是否是前景，没有用onehot,
         bbox_reg = self.bbox_pred(x)  # 这一行有关bbox_pred，代表RPN图中的下一行
         return logits, bbox_reg
     
@@ -42,7 +42,7 @@ class RegionProposalNetwork(nn.Module):
         self._pre_nms_top_n = pre_nms_top_n
         self._post_nms_top_n = post_nms_top_n
         self.nms_thresh = nms_thresh
-        self.min_size = 1
+        self.min_size = 1       # 最小box的宽高大小，因为有可能为小数，至少是1个点
                 
     def create_proposal(self, anchor, objectness, pred_bbox_delta, image_shape):
         if self.training:
@@ -52,10 +52,10 @@ class RegionProposalNetwork(nn.Module):
             pre_nms_top_n = self._pre_nms_top_n['testing']
             post_nms_top_n = self._post_nms_top_n['testing']
             
-        pre_nms_top_n = min(objectness.shape[0], pre_nms_top_n)  # 输出的nms数量，等于目标的数目和设定的nms数量的最小值
-        top_n_idx = objectness.topk(pre_nms_top_n)[1]  # 找到objectness中最大的pre_nms_top_n个的index
+        pre_nms_top_n = min(objectness.shape[0], pre_nms_top_n)  # 输出的nms数量，等于目标的数目和设定的nms数量的最小值, 这里先判断生成的目标框数量有没有大于nms规定的数量
+        top_n_idx = objectness.topk(pre_nms_top_n)[1]  # 找到objectness中最大的pre_nms_top_n个的index，最有可能有目标的前多少个框 获取索引
         score = objectness[top_n_idx]  # 找出最高这几个的cls值
-        proposal = self.box_coder.decode(pred_bbox_delta[top_n_idx], anchor[top_n_idx])  # 解码为相对于pred_bbox_delta的bbox的位置
+        proposal = self.box_coder.decode(pred_bbox_delta[top_n_idx], anchor[top_n_idx])  # 解码为相对于pred_bbox_delta的bbox的位置， 获得位置，同时加上微调量，每一个box都有一个微调量
         
         proposal, score = process_box(proposal, score, image_shape, self.min_size)  # 该函数的作用在于使得bbox不超过图片的范围，且删除一些宽高小于min_size的bbox
         keep = nms(proposal, score, self.nms_thresh)[:post_nms_top_n]  # 实现了非极大值抑制，最多取post_nms_top_n个
@@ -66,25 +66,25 @@ class RegionProposalNetwork(nn.Module):
         iou = box_iou(gt_box, anchor)  # 计算gt与预先设定的anchor之间的iou
         label, matched_idx = self.proposal_matcher(iou)  # 返回是属于正样本还是负样本
         
-        pos_idx, neg_idx = self.fg_bg_sampler(label)  # 根据采样总数和正样本比例，找出正负样本的index
+        pos_idx, neg_idx = self.fg_bg_sampler(label)  # 根据采样总数和正样本比例，找出正负样本的index，不是所有的anchor都拿来训练
         idx = torch.cat((pos_idx, neg_idx))  # 获得总的用来训练的index
-        regression_target = self.box_coder.encode(gt_box[matched_idx[pos_idx]], anchor[pos_idx])  # 将gt的位置编码为与模型输出的位置一致
+        regression_target = self.box_coder.encode(gt_box[matched_idx[pos_idx]], anchor[pos_idx])  # 将gt的位置编码为与模型输出的位置一致，只要正样本的，就是计算偏移系数 从而和模型的输出一致： 索引可以大于数组维度，会扩充，广播机制吧
         
-        objectness_loss = F.binary_cross_entropy_with_logits(objectness[idx], label[idx])  # 计算cls的loss
+        objectness_loss = F.binary_cross_entropy_with_logits(objectness[idx], label[idx])  # 计算cls的loss， 只使用采样数目的正负样本
         box_loss = F.l1_loss(pred_bbox_delta[pos_idx], regression_target, reduction='sum') / idx.numel()  # 用l1范数计算bbox部分的loss
 
         return objectness_loss, box_loss
         
     def forward(self, feature, image_shape, target=None):
-        if target is not None:
+        if target is not None:      # 做这个是做判断是训练的时候还是测试的时候，
             gt_box = target['boxes']
         anchor = self.anchor_generator(feature, image_shape)  # 计算得到anchor的相对位置
         
         objectness, pred_bbox_delta = self.head(feature)  # 输入RPN的网络中，获得置信度和预测框
         objectness = objectness.permute(0, 2, 3, 1).flatten()  # 将cls的那一通道移到最后一位
         pred_bbox_delta = pred_bbox_delta.permute(0, 2, 3, 1).reshape(-1, 4)  # 将bbox的那一通道移到最后一位
-
-        proposal = self.create_proposal(anchor, objectness.detach(), pred_bbox_delta.detach(), image_shape)
+        # proposal是预测的估计目标，使用了nms
+        proposal = self.create_proposal(anchor, objectness.detach(), pred_bbox_delta.detach(), image_shape)     # detach返回一个新的tensor，从当前计算图中分离下来的，但是仍指向原变量的存放位置,不同之处只是requires_grad为false，得到的这个tensor永远不需要计算其梯度，不具有grad。
         if self.training:  # 如果是train阶段，计算此时的loss
             objectness_loss, box_loss = self.compute_loss(objectness, pred_bbox_delta, gt_box, anchor)
             return proposal, dict(rpn_objectness_loss=objectness_loss, rpn_box_loss=box_loss)

@@ -78,7 +78,7 @@ class VOCDataset(GeneralizedDataset):
         if train:
             if not os.path.exists(checked_id_file):
                 self.make_aspect_ratios()  # 计算每一个图片的宽高比
-            self.check_dataset(checked_id_file)  # 判断一个图片的信息中，是否boxes，labels，masks都齐了
+            self.check_dataset(checked_id_file)  # 判断一个图片的信息中，是否boxes，labels，masks都齐了,voc中好像有个图像没有 2009_005069
             
     def make_aspect_ratios(self):
         self._aspect_ratios = []
@@ -99,7 +99,7 @@ class VOCDataset(GeneralizedDataset):
         masks = transforms.ToTensor()(masks)
         uni = masks.unique()  # 找到mask中有哪几种不同的数值
         uni = uni[(uni > 0) & (uni < 1)]  # 其中在0和1之间的数值分别代表一个mask
-        masks = (masks == uni.reshape(-1, 1, 1)).to(torch.uint8)  # 将图片中等于uni的部分分别转为值为0,1的图片
+        masks = (masks == uni.reshape(-1, 1, 1)).to(torch.uint8)  # 将图片中等于uni的部分分别转为值为0,1的图片        类别，宽，高 格式，每一个类别一个通道
         
         anno = ET.parse(os.path.join(self.data_dir, "Annotations", "{}.xml".format(img_id)))  # 对应的xml文件中读入
         boxes = []
