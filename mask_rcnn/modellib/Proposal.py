@@ -9,7 +9,7 @@ import torch
 import torch.utils.data
 from torch.autograd import Variable
 
-from utils.utils import apply_box_deltas,nms
+from utils.utils import apply_box_deltas, nms
 ############################################################
 #  Proposal Layer
 ############################################################
@@ -79,8 +79,7 @@ def proposal_layer(inputs, proposal_count, nms_threshold, anchors, config=None):
     # for small objects, so we're skipping it.
 
     # Non-max suppression
-    # TODO replcae the nms
-    keep = nms(torch.cat((boxes, scores.unsqueeze(1)), 1).data, nms_threshold)
+    keep = nms(boxes,scores, nms_threshold)
     keep = keep[:proposal_count]
     boxes = boxes[keep, :]
 

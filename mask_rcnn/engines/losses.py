@@ -85,7 +85,7 @@ def compute_mrcnn_class_loss(target_class_ids, pred_class_logits):
     """
 
     # Loss
-    if target_class_ids.size():
+    if target_class_ids.numel():
         loss = F.cross_entropy(pred_class_logits,target_class_ids.long())
     else:
         loss = Variable(torch.FloatTensor([0]), requires_grad=False)
@@ -103,7 +103,7 @@ def compute_mrcnn_bbox_loss(target_bbox, target_class_ids, pred_bbox):
     pred_bbox: [batch, num_rois, num_classes, (dy, dx, log(dh), log(dw))]
     """
 
-    if target_class_ids.size():
+    if target_class_ids.numel():
         # Only positive ROIs contribute to the loss. And only
         # the right class_id of each ROI. Get their indicies.
         positive_roi_ix = torch.nonzero(target_class_ids > 0)[:, 0]
@@ -133,7 +133,7 @@ def compute_mrcnn_mask_loss(target_masks, target_class_ids, pred_masks):
     pred_masks: [batch, proposals, height, width, num_classes] float32 tensor
                 with values from 0 to 1.
     """
-    if target_class_ids.size():
+    if target_class_ids.numel():
         # Only positive ROIs contribute to the loss. And only
         # the class specific mask of each ROI.
         positive_ix = torch.nonzero(target_class_ids > 0)[:, 0]

@@ -253,7 +253,7 @@ class Engine(MaskRCNN):
             rois, target_class_ids, target_deltas, target_mask = \
                 detection_target_layer(rpn_rois, gt_class_ids, gt_boxes, gt_masks, self.config)
 
-            if not rois.size():
+            if not rois.numel():
                 mrcnn_class_logits = Variable(torch.FloatTensor())
                 mrcnn_class = Variable(torch.IntTensor())
                 mrcnn_bbox = Variable(torch.FloatTensor())
@@ -285,7 +285,7 @@ class Engine(MaskRCNN):
         layers: Allows selecting wich layers to train. It can be:
             - A regular expression to match layer names to train
             - One of these predefined values:
-              heaads: The RPN, classifier and mask heads of the network
+              heads: The RPN, classifier and mask heads of the network
               all: All the layers
               3+: Train Resnet stage 3 and up
               4+: Train Resnet stage 4 and up
@@ -416,17 +416,17 @@ class Engine(MaskRCNN):
             # Progress
             utils.printProgressBar(step + 1, steps, prefix="\t{}/{}".format(step + 1, steps),
                              suffix="Complete - loss: {:.5f} - rpn_class_loss: {:.5f} - rpn_bbox_loss: {:.5f} - mrcnn_class_loss: {:.5f} - mrcnn_bbox_loss: {:.5f} - mrcnn_mask_loss: {:.5f}".format(
-                                 loss.data.cpu()[0], rpn_class_loss.data.cpu()[0], rpn_bbox_loss.data.cpu()[0],
-                                 mrcnn_class_loss.data.cpu()[0], mrcnn_bbox_loss.data.cpu()[0],
-                                 mrcnn_mask_loss.data.cpu()[0]), length=10)
+                                 loss.data.cpu().item(), rpn_class_loss.data.cpu().item(), rpn_bbox_loss.data.cpu().item(),
+                                 mrcnn_class_loss.data.cpu().item(), mrcnn_bbox_loss.data.cpu().item(),
+                                 mrcnn_mask_loss.data.cpu().item()), length=10)
 
             # Statistics
-            loss_sum += loss.data.cpu()[0] / steps
-            loss_rpn_class_sum += rpn_class_loss.data.cpu()[0] / steps
-            loss_rpn_bbox_sum += rpn_bbox_loss.data.cpu()[0] / steps
-            loss_mrcnn_class_sum += mrcnn_class_loss.data.cpu()[0] / steps
-            loss_mrcnn_bbox_sum += mrcnn_bbox_loss.data.cpu()[0] / steps
-            loss_mrcnn_mask_sum += mrcnn_mask_loss.data.cpu()[0] / steps
+            loss_sum += loss.data.cpu().item() / steps
+            loss_rpn_class_sum += rpn_class_loss.data.cpu().item() / steps
+            loss_rpn_bbox_sum += rpn_bbox_loss.data.cpu().item() / steps
+            loss_mrcnn_class_sum += mrcnn_class_loss.data.cpu().item() / steps
+            loss_mrcnn_bbox_sum += mrcnn_bbox_loss.data.cpu().item() / steps
+            loss_mrcnn_mask_sum += mrcnn_mask_loss.data.cpu().item() / steps
 
             # Break after 'steps' steps
             if step == steps - 1:
@@ -490,17 +490,17 @@ class Engine(MaskRCNN):
             # Progress
             utils.printProgressBar(step + 1, steps, prefix="\t{}/{}".format(step + 1, steps),
                              suffix="Complete - loss: {:.5f} - rpn_class_loss: {:.5f} - rpn_bbox_loss: {:.5f} - mrcnn_class_loss: {:.5f} - mrcnn_bbox_loss: {:.5f} - mrcnn_mask_loss: {:.5f}".format(
-                                 loss.data.cpu()[0], rpn_class_loss.data.cpu()[0], rpn_bbox_loss.data.cpu()[0],
-                                 mrcnn_class_loss.data.cpu()[0], mrcnn_bbox_loss.data.cpu()[0],
-                                 mrcnn_mask_loss.data.cpu()[0]), length=10)
+                                 loss.data.cpu().item(), rpn_class_loss.data.cpu().item(), rpn_bbox_loss.data.cpu().item(),
+                                 mrcnn_class_loss.data.cpu().item(), mrcnn_bbox_loss.data.cpu().item(),
+                                 mrcnn_mask_loss.data.cpu().item()), length=10)
 
             # Statistics
-            loss_sum += loss.data.cpu()[0] / steps
-            loss_rpn_class_sum += rpn_class_loss.data.cpu()[0] / steps
-            loss_rpn_bbox_sum += rpn_bbox_loss.data.cpu()[0] / steps
-            loss_mrcnn_class_sum += mrcnn_class_loss.data.cpu()[0] / steps
-            loss_mrcnn_bbox_sum += mrcnn_bbox_loss.data.cpu()[0] / steps
-            loss_mrcnn_mask_sum += mrcnn_mask_loss.data.cpu()[0] / steps
+            loss_sum += loss.data.cpu().item() / steps
+            loss_rpn_class_sum += rpn_class_loss.data.cpu().item() / steps
+            loss_rpn_bbox_sum += rpn_bbox_loss.data.cpu().item() / steps
+            loss_mrcnn_class_sum += mrcnn_class_loss.data.cpu().item() / steps
+            loss_mrcnn_bbox_sum += mrcnn_bbox_loss.data.cpu().item() / steps
+            loss_mrcnn_mask_sum += mrcnn_mask_loss.data.cpu().item() / steps
 
             # Break after 'steps' steps
             if step == steps - 1:

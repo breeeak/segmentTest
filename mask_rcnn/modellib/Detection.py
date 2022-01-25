@@ -8,7 +8,7 @@ import torch
 import torch.utils.data
 from torch.autograd import Variable
 
-from utils.utils import apply_box_deltas,unique1d,intersect1d,nms,parse_image_meta,box_refinement,CropAndResizeFunction
+from utils.utils import apply_box_deltas,unique1d,intersect1d,nms,parse_image_meta,box_refinement,roi_align
 
 ############################################################
 #  Detection Layer
@@ -97,8 +97,9 @@ def refine_detections(rois, probs, deltas, window, config):
         ix_scores = pre_nms_scores[ixs]
         ix_scores, order = ix_scores.sort(descending=True)
         ix_rois = ix_rois[order.data,:]
-        # TODO replace nms
-        class_keep = nms(torch.cat((ix_rois, ix_scores.unsqueeze(1)), dim=1).data, config.DETECTION_NMS_THRESHOLD)
+
+        # class_keep = nms(torch.cat((ix_rois, ix_scores.unsqueeze(1)), dim=1).data, config.DETECTION_NMS_THRESHOLD)
+        class_keep = nms(ix_rois, ix_scores, config.DETECTION_NMS_THRESHOLD)
 
         # Map indicies
         class_keep = keep[ixs[order[class_keep].data].data]
@@ -215,7 +216,7 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
     # Handle COCO crowds
     # A crowd box in COCO is a bounding box around several instances. Exclude
     # them from training. A crowd box is given a negative class ID.
-    if torch.nonzero(gt_class_ids < 0).size():
+    if torch.nonzero(gt_class_ids < 0).numel():
         crowd_ix = torch.nonzero(gt_class_ids < 0)[:, 0]
         non_crowd_ix = torch.nonzero(gt_class_ids > 0)[:, 0]
         crowd_boxes = gt_boxes[crowd_ix.data, :]
@@ -244,7 +245,7 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
 
     # Subsample ROIs. Aim for 33% positive
     # Positive ROIs
-    if torch.nonzero(positive_roi_bool).size():
+    if torch.nonzero(positive_roi_bool).numel():
         positive_indices = torch.nonzero(positive_roi_bool)[:, 0]
 
         positive_count = int(config.TRAIN_ROIS_PER_IMAGE *
@@ -287,10 +288,14 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
             y2 = (y2 - gt_y1) / gt_h
             x2 = (x2 - gt_x1) / gt_w
             boxes = torch.cat([y1, x1, y2, x2], dim=1)
-        box_ids = Variable(torch.arange(roi_masks.size()[0]), requires_grad=False).int()
+        box_ids = roi_masks.new_full((roi_masks.shape[0], 1), 0)
+        # box_ids = Variable(torch.arange(roi_masks.size()[0]), requires_grad=False).int()
         if config.GPU_COUNT:
             box_ids = box_ids.cuda()
-        masks = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks.unsqueeze(1), boxes, box_ids).data, requires_grad=False)
+        roi = torch.cat((box_ids, boxes), dim=1)
+        masks = Variable(roi_align(roi_masks.unsqueeze(1), roi, config.MASK_SHAPE[0],image_shape=config.IMAGE_SHAPE).data, requires_grad=False)
+
+        # masks = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks.unsqueeze(1), boxes, box_ids).data, requires_grad=False)
         masks = masks.squeeze(1)
 
         # Threshold mask pixels at 0.5 to have GT masks be 0 or 1 to use with
@@ -301,9 +306,9 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
 
     # 2. Negative ROIs are those with < 0.5 with every GT box. Skip crowds.
     negative_roi_bool = roi_iou_max < 0.5
-    negative_roi_bool = negative_roi_bool & no_crowd_bool
+    negative_roi_bool = (negative_roi_bool & no_crowd_bool.bool()).int()
     # Negative ROIs. Add enough to maintain positive:negative ratio.
-    if torch.nonzero(negative_roi_bool).size() and positive_count>0:
+    if torch.nonzero(negative_roi_bool).numel() and positive_count>0:
         negative_indices = torch.nonzero(negative_roi_bool)[:, 0]
         r = 1.0 / config.ROI_POSITIVE_RATIO
         negative_count = int(r * positive_count - positive_count)

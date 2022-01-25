@@ -3,22 +3,46 @@
 # @Author  : Marshall
 # @FileName: train.py
 import argparse
-from yarn_config import YarnConfig
-from modellib import MaskRCNN
-from datasets.YarnDataset import YarnDataset
+from configs.coco_config import CocoConfig
+from datasets.CocoDataset import CocoDataset
 from engines.engine import Engine
 
-if __name__ == '__main__':
+import torch
+import numpy as np
+import random
 
-    config = YarnConfig()
+def setup_seed(seed):
+    torch.manual_seed(seed)     # cpu 种子
+    torch.cuda.manual_seed_all(seed)    # gpu种子
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.backends.cudnn.deterministic = True   # cudnn
+
+
+if __name__ == '__main__':
+    setup_seed(777)
+    config = CocoConfig()
 
     model = Engine(config=config)
 
     if config.GPU_COUNT:
         model = model.cuda()
 
-    dataset_train = YarnDataset()
-    dataset_val = YarnDataset()
+    model_path = ""
+    # Load weights
+    print("Loading weights ", model_path)
+    model.load_weights(model_path)
+
+    # Training dataset. Use the training set and 35K from the
+    # validation set, as as in the Mask RCNN paper.
+    dataset_train = CocoDataset()
+    dataset_train.load_coco(config.DEFAULT_DATASET_PATH, "train", year=config.DEFAULT_DATASET_YEAR)
+    dataset_train.prepare()
+
+    # Validation dataset
+    dataset_val = CocoDataset()
+    dataset_val.load_coco(config.DEFAULT_DATASET_PATH, "val", year=config.DEFAULT_DATASET_YEAR)
+    dataset_val.prepare()
 
     # *** This training schedule is an example. Update to your needs ***
 

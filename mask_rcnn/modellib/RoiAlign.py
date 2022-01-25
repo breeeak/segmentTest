@@ -2,12 +2,12 @@
 # @Time    : 2022/1/21 21:40
 # @Author  : Marshall
 # @FileName: RoiAlign.py
-
+import math
 import torch
 
 import torch.utils.data
 from torch.autograd import Variable
-from utils.utils import CropAndResizeFunction,log2
+from utils.utils import roi_align
 
 
 ############################################################
@@ -55,7 +55,7 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
     image_area = Variable(torch.FloatTensor([float(image_shape[0]*image_shape[1])]), requires_grad=False)
     if boxes.is_cuda:
         image_area = image_area.cuda()
-    roi_level = 4 + log2(torch.sqrt(h*w)/(224.0/torch.sqrt(image_area)))
+    roi_level = 4 + torch.log2(torch.sqrt(h*w)/(224.0/torch.sqrt(image_area)))
     roi_level = roi_level.round().int()
     roi_level = roi_level.clamp(2,5)
 
@@ -85,11 +85,19 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
         # Here we use the simplified approach of a single value per bin,
         # which is how it's done in tf.crop_and_resize()
         # Result: [batch * num_boxes, pool_height, pool_width, channels]
-        ind = Variable(torch.zeros(level_boxes.size()[0]),requires_grad=False).int()
+        ind = level_boxes.new_full((level_boxes.shape[0], 1), 0)
+        # ind = Variable(torch.zeros(level_boxes.size()[0]),requires_grad=False).int()
         if level_boxes.is_cuda:
             ind = ind.cuda()
         feature_maps[i] = feature_maps[i].unsqueeze(0)  #CropAndResizeFunction needs batch dimension
-        pooled_features = CropAndResizeFunction(pool_size, pool_size, 0)(feature_maps[i], level_boxes, ind)
+        #######
+
+        roi = torch.cat((ind, level_boxes), dim=1)
+        pooled_features = roi_align(feature_maps[i ],roi,pool_size,image_shape)
+
+
+        ######
+        # pooled_features = CropAndResizeFunction(pool_size, pool_size, 0)(feature_maps[i], level_boxes, ind)
         pooled.append(pooled_features)
 
     # Pack pooled features into one tensor
@@ -104,3 +112,7 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
     pooled = pooled[box_to_level, :, :]
 
     return pooled
+
+
+
+
