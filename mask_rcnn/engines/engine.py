@@ -407,7 +407,7 @@ class Engine(MaskRCNN):
 
             # Backpropagation
             loss.backward()
-            torch.nn.utils.clip_grad_norm(self.parameters(), 5.0)
+            torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
             if (batch_count % self.config.BATCH_SIZE) == 0:
                 optimizer.step()
                 optimizer.zero_grad()

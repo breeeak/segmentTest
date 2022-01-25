@@ -6,8 +6,6 @@
 import torch.nn as nn
 
 
-from utils.utils import SamePad2d
-
 
 class ResNet(nn.Module):
     def __init__(self, architecture, stage5=False):
@@ -19,11 +17,10 @@ class ResNet(nn.Module):
         self.stage5 = stage5
 
         self.C1 = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3),
+            nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False),
             nn.BatchNorm2d(64, eps=0.001, momentum=0.01),
             nn.ReLU(inplace=True),
-            SamePad2d(kernel_size=3, stride=2),
-            nn.MaxPool2d(kernel_size=3, stride=2),
+            nn.MaxPool2d(kernel_size=3, stride=2,padding=1),
         )
         self.C2 = self.make_layer(self.block, 64, self.layers[0])
         self.C3 = self.make_layer(self.block, 128, self.layers[1], stride=2)
@@ -49,7 +46,7 @@ class ResNet(nn.Module):
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride),
+                          kernel_size=1, stride=stride, bias=False),
                 nn.BatchNorm2d(planes * block.expansion, eps=0.001, momentum=0.01),
             )
 
@@ -67,12 +64,11 @@ class Bottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride)
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False)
         self.bn1 = nn.BatchNorm2d(planes, eps=0.001, momentum=0.01)
-        self.padding2 = SamePad2d(kernel_size=3, stride=1)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, bias=False)
         self.bn2 = nn.BatchNorm2d(planes, eps=0.001, momentum=0.01)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1)
+        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(planes * 4, eps=0.001, momentum=0.01)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -85,7 +81,6 @@ class Bottleneck(nn.Module):
         out = self.bn1(out)
         out = self.relu(out)
 
-        out = self.padding2(out)
         out = self.conv2(out)
         out = self.bn2(out)
         out = self.relu(out)
@@ -103,4 +98,16 @@ class Bottleneck(nn.Module):
 
 
 if __name__ == '__main__':
-    ResNet("resnet101")
+    # 测试模型是否可行
+    import torch
+    model = ResNet("resnet101",stage5=True)
+    model.eval()
+    image = torch.randn(1, 3, 1024, 1024)
+    output = model(image)
+    print(output.size())
+    import torchvision
+    model2 = torchvision.models.resnet101()
+    model2.eval()
+    image = torch.randn(1, 3, 1024, 1024)
+    output2 = model2(image)
+    print((output2.size()))

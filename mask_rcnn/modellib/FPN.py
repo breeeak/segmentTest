@@ -7,18 +7,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-from utils.utils import SamePad2d
 
 
 class TopDownLayer(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(TopDownLayer, self).__init__()
         self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=1)
-        self.padding2 = SamePad2d(kernel_size=3, stride=1)
-        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1,padding=1)
 
     def forward(self, x, y):
-        y = F.upsample(y, scale_factor=2)
+        y = F.interpolate(y, scale_factor=2)
         x = self.conv1(x)
         return self.conv2(self.padding2(x+y))
 
@@ -35,23 +33,19 @@ class FPN(nn.Module):
         self.P6 = nn.MaxPool2d(kernel_size=1, stride=2)
         self.P5_conv1 = nn.Conv2d(2048, self.out_channels, kernel_size=1, stride=1)
         self.P5_conv2 = nn.Sequential(
-            SamePad2d(kernel_size=3, stride=1),
-            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1),
+            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1, padding=1),
         )
         self.P4_conv1 =  nn.Conv2d(1024, self.out_channels, kernel_size=1, stride=1)
         self.P4_conv2 = nn.Sequential(
-            SamePad2d(kernel_size=3, stride=1),
-            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1),
+            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1, padding=1),
         )
         self.P3_conv1 = nn.Conv2d(512, self.out_channels, kernel_size=1, stride=1)
         self.P3_conv2 = nn.Sequential(
-            SamePad2d(kernel_size=3, stride=1),
-            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1),
+            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1, padding=1),
         )
         self.P2_conv1 = nn.Conv2d(256, self.out_channels, kernel_size=1, stride=1)
         self.P2_conv2 = nn.Sequential(
-            SamePad2d(kernel_size=3, stride=1),
-            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1),
+            nn.Conv2d(self.out_channels, self.out_channels, kernel_size=3, stride=1, padding=1),
         )
 
     def forward(self, x):
@@ -64,9 +58,9 @@ class FPN(nn.Module):
         c4_out = x
         x = self.C5(x)
         p5_out = self.P5_conv1(x)
-        p4_out = self.P4_conv1(c4_out) + F.upsample(p5_out, scale_factor=2)
-        p3_out = self.P3_conv1(c3_out) + F.upsample(p4_out, scale_factor=2)
-        p2_out = self.P2_conv1(c2_out) + F.upsample(p3_out, scale_factor=2)
+        p4_out = self.P4_conv1(c4_out) + F.interpolate(p5_out, scale_factor=2)
+        p3_out = self.P3_conv1(c3_out) + F.interpolate(p4_out, scale_factor=2)
+        p2_out = self.P2_conv1(c2_out) + F.interpolate(p3_out, scale_factor=2)
 
         p5_out = self.P5_conv2(p5_out)
         p4_out = self.P4_conv2(p4_out)

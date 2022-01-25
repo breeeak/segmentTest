@@ -2,14 +2,8 @@
 # @Time    : 2022/1/21 21:21
 # @Author  : Marshall
 # @FileName: RPN.py
-import math
-
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.utils.data
 
-from utils.utils import SamePad2d
 
 class RPN(nn.Module):
     """Builds the model of Region Proposal Network.
@@ -31,8 +25,8 @@ class RPN(nn.Module):
         self.anchor_stride = anchor_stride
         self.depth = depth
 
-        self.padding = SamePad2d(kernel_size=3, stride=self.anchor_stride)
-        self.conv_shared = nn.Conv2d(self.depth, 512, kernel_size=3, stride=self.anchor_stride)
+
+        self.conv_shared = nn.Conv2d(self.depth, 512, kernel_size=3, padding=1, stride=self.anchor_stride)
         self.relu = nn.ReLU(inplace=True)
         self.conv_class = nn.Conv2d(512, 2 * anchors_per_location, kernel_size=1, stride=1)
         self.softmax = nn.Softmax(dim=2)
@@ -40,7 +34,7 @@ class RPN(nn.Module):
 
     def forward(self, x):
         # Shared convolutional base of the RPN
-        x = self.relu(self.conv_shared(self.padding(x)))
+        x = self.relu(self.conv_shared(x))
 
         # Anchor Score. [batch, anchors per location * 2, height, width].
         rpn_class_logits = self.conv_class(x)
