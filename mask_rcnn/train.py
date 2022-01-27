@@ -44,21 +44,21 @@ if __name__ == '__main__':
     dataset_val.prepare()
 
     # *** This training schedule is an example. Update to your needs ***
-
-    # Training - Stage 1
-    print("Training network heads")
-    model.train_model(dataset_train, dataset_val,
-                      learning_rate=config.LEARNING_RATE,
-                      epochs=40,
-                      layers='heads')
-
-    # Training - Stage 2
-    # Finetune layers from ResNet stage 4 and up
-    print("Fine tune Resnet stage 4 and up")
-    model.train_model(dataset_train, dataset_val,
-                      learning_rate=config.LEARNING_RATE,
-                      epochs=120,
-                      layers='4+')
+    #
+    # # Training - Stage 1
+    # print("Training network heads")
+    # model.train_model(dataset_train, dataset_val,
+    #                   learning_rate=config.LEARNING_RATE,
+    #                   epochs=40,
+    #                   layers='heads')
+    #
+    # # Training - Stage 2
+    # # Finetune layers from ResNet stage 4 and up
+    # print("Fine tune Resnet stage 4 and up")
+    # model.train_model(dataset_train, dataset_val,
+    #                   learning_rate=config.LEARNING_RATE,
+    #                   epochs=120,
+    #                   layers='4+')
 
     # Training - Stage 3
     # Fine tune all layers

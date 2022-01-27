@@ -181,7 +181,7 @@ class Dataset(torch.utils.data.Dataset):
         # RPN bounding boxes: [max anchors per image, (dy, dx, log(dh), log(dw))]
         rpn_bbox = np.zeros((config.RPN_TRAIN_ANCHORS_PER_IMAGE, 4))
 
-        # Handle COCO crowds
+        # Handle COCO crowds        TODO 网络是直接不处理相交的目标的 有遮盖的目标就舍弃
         # A crowd box in COCO is a bounding box around several instances. Exclude
         # them from training. A crowd box is given a negative class ID.
         crowd_ix = np.where(gt_class_ids < 0)[0]
@@ -270,5 +270,4 @@ class Dataset(torch.utils.data.Dataset):
             # Normalize
             rpn_bbox[ix] /= config.RPN_BBOX_STD_DEV
             ix += 1
-
         return rpn_match, rpn_bbox

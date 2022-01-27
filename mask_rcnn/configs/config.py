@@ -24,7 +24,7 @@ class Config(object):
     # Name the configurations. For example, 'COCO', 'Experiment 3', ...etc.
     # Useful if your code needs to do things differently depending on which
     # experiment is running.
-    NAME = None  # Override in sub-classes
+    NAME = None  # Override in sub-classes, Show in logs name etc.
 
     ROOT_DIR = os.getcwd()
     # Directory to save logs and model checkpoints, if not provided
@@ -91,7 +91,7 @@ class Config(object):
 
     # If enabled, resizes instance masks to a smaller size to reduce
     # memory load. Recommended when using high-resolution images.
-    USE_MINI_MASK = True
+    USE_MINI_MASK = False
     MINI_MASK_SHAPE = (56, 56)  # (height, width) of the mini-mask
 
     # Input image resing

@@ -87,13 +87,16 @@ def pyramid_roi_align(inputs, pool_size, image_shape):
         # Result: [batch * num_boxes, pool_height, pool_width, channels]
         ind = level_boxes.new_full((level_boxes.shape[0], 1), 0)
         # ind = Variable(torch.zeros(level_boxes.size()[0]),requires_grad=False).int()
+        y1_, x1_, y2_, x2_ = level_boxes.chunk(4, dim=1)
+        boxes_roi = torch.cat([x1_, y1_, x2_, y2_], dim=1)
+
         if level_boxes.is_cuda:
             ind = ind.cuda()
         feature_maps[i] = feature_maps[i].unsqueeze(0)  #CropAndResizeFunction needs batch dimension
         #######
 
-        roi = torch.cat((ind, level_boxes), dim=1)
-        pooled_features = roi_align(feature_maps[i ],roi,pool_size,image_shape)
+        roi = torch.cat((ind, boxes_roi), dim=1)
+        pooled_features = roi_align(feature_maps[i], roi, pool_size, spatial_scale=image_shape[0])
 
 
         ######

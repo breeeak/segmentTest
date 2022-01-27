@@ -275,7 +275,9 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
         roi_masks = gt_masks[roi_gt_box_assignment.data,:,:]
 
         # Compute mask targets
-        boxes = positive_rois
+        # boxes = positive_rois
+        y1, x1, y2, x2 = positive_rois.chunk(4, dim=1)
+        boxes = torch.cat([x1, y1, x2, y2], dim=1)
         if config.USE_MINI_MASK:
             # Transform ROI corrdinates from normalized image space
             # to normalized mini-mask space.
@@ -287,13 +289,13 @@ def detection_target_layer(proposals, gt_class_ids, gt_boxes, gt_masks, config):
             x1 = (x1 - gt_x1) / gt_w
             y2 = (y2 - gt_y1) / gt_h
             x2 = (x2 - gt_x1) / gt_w
-            boxes = torch.cat([y1, x1, y2, x2], dim=1)
+            boxes = torch.cat([x1, y1, x2, y2], dim=1)
         box_ids = roi_masks.new_full((roi_masks.shape[0], 1), 0)
         # box_ids = Variable(torch.arange(roi_masks.size()[0]), requires_grad=False).int()
         if config.GPU_COUNT:
             box_ids = box_ids.cuda()
         roi = torch.cat((box_ids, boxes), dim=1)
-        masks = Variable(roi_align(roi_masks.unsqueeze(1), roi, config.MASK_SHAPE[0],image_shape=config.IMAGE_SHAPE).data, requires_grad=False)
+        masks = Variable(roi_align(roi_masks.unsqueeze(1), roi, config.MASK_SHAPE[0], spatial_scale=roi_masks.shape[-1]).data,  requires_grad=False)
 
         # masks = Variable(CropAndResizeFunction(config.MASK_SHAPE[0], config.MASK_SHAPE[1], 0)(roi_masks.unsqueeze(1), boxes, box_ids).data, requires_grad=False)
         masks = masks.squeeze(1)

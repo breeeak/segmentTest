@@ -37,18 +37,17 @@ def nms(box, score, threshold):
     return torch.ops.torchvision.nms(box, score, threshold)
 
 
-def roi_align(feature_maps,roi,pool_size, image_shape):     # TODO replace CropAndResizeFunction or ROIAlign
-
-    feature_shape = feature_maps.shape[-2:]
-    possible_scales = []
-    for s1, s2 in zip(feature_shape, image_shape):
-        scale = 2 ** int(math.log2(s1 / s2))
-        possible_scales.append(scale)
-    assert possible_scales[0] == possible_scales[1]
-    spatial_scale = possible_scales[0]
-
+def roi_align(feature_maps, roi, pool_size, image_shape=None, spatial_scale=1, sampling_ratio=-1):     # TODO replace CropAndResizeFunction or ROIAlign
+    if image_shape is not None:
+        feature_shape = feature_maps.shape[-2:]
+        possible_scales = []
+        for s1, s2 in zip(feature_shape, image_shape):
+            scale = 2 ** int(math.log2(s1 / s2))
+            possible_scales.append(scale)
+        assert possible_scales[0] == possible_scales[1]
+        spatial_scale = possible_scales[0]
     results = torch.ops.torchvision.roi_align(
-        feature_maps, roi, spatial_scale, pool_size, pool_size, 2, False)
+        feature_maps, roi, spatial_scale, pool_size, pool_size, sampling_ratio, False)
     return results
 
 def apply_box_deltas(boxes, deltas):
@@ -359,7 +358,7 @@ def resize_image(image, min_dim=None, max_dim=None, padding=False):
             scale = max_dim / image_max
     # Resize image and mask
     if scale != 1:
-        image = resize(image, (round(h * scale), round(w * scale)))
+        image = resize(image, (round(h * scale), round(w * scale)), preserve_range=True).astype(np.uint8)
         # image = scipy.misc.imresize(
         #     image, (round(h * scale), round(w * scale)))
     # Need padding?
@@ -404,8 +403,8 @@ def minimize_mask(bbox, mask, mini_shape):
         m = m[y1:y2, x1:x2]
         if m.size == 0:
             raise Exception("Invalid bounding box with area of zero")
-        m = resize(m.astype(float), mini_shape)     # 默认, interp='bilinear'
-        mini_mask[:, :, i] = np.where(m >= 128, 1, 0)
+        m = resize(m.astype(float), mini_shape, preserve_range=True)     # 默认, interp='bilinear'
+        mini_mask[:, :, i] = np.where(m >= 0.5, 1, 0)
     return mini_mask
 
 
@@ -443,7 +442,7 @@ def unmold_mask(mask, bbox, image_shape):
     y1, x1, y2, x2 = bbox
     # mask = scipy.misc.imresize(
     #     mask, (y2 - y1, x2 - x1), interp='bilinear').astype(np.float32) / 255.0
-    mask = resize(mask, (y2 - y1, x2 - x1)).astype(np.float32) / 255.0
+    mask = resize(mask, (y2 - y1, x2 - x1), preserve_range=True).astype(np.float32) / 255.0
     mask = np.where(mask >= threshold, 1, 0).astype(np.uint8)
 
     # Put the mask in the right location.
